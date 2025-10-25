@@ -55,16 +55,20 @@ def generate_content_loop(client, messages, verbose, max_iterations=20):
             for candidate in response.candidates:
                 messages.append(candidate.content)
 
-            # Check if we have a final text response
-            if response.text:
-                print("Final response:")
-                print(response.text)
-                break
 
-            # Handle function calls
-            if response.function_calls:
+            # Handle function calls - check candidate parts for function calls
+            function_calls = []
+            for candidate in response.candidates:
+                if hasattr(candidate, 'content') and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'function_call') and part.function_call:
+                            if verbose:
+                                print(f"Calling function: {part.function_call.name}")
+                            function_calls.append(part.function_call)
+            
+            if function_calls:
                 function_responses = []
-                for function_call_part in response.function_calls:
+                for function_call_part in function_calls:
                     function_call_result = call_function(function_call_part, verbose)
                     if (
                         not function_call_result.parts
@@ -78,12 +82,17 @@ def generate_content_loop(client, messages, verbose, max_iterations=20):
                     messages.append(types.Content(role="user", parts=function_responses))
                 else:
                     raise Exception("no function responses generated, exiting.")
+            else:
+                # No function calls, check if we have a final text response
+                if response.text:
+                    print("Final response:")
+                    print(response.text)
+                    break
         except Exception as e:
             print(f"Error: {e}")
             break
     else:
         print(f"Reached maximum iterations ({max_iterations}). Agent may not have completed the task.")
 
-if name == "__main__":
-
+if __name__ == "__main__":
     main()
